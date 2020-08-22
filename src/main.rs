@@ -71,7 +71,7 @@ fn x96check(file: &str) -> io::Result<String> {
         reader.read_exact(header)?;
         let header: ImageDosHeader = std::ptr::read(header.as_ptr() as *const _);
         if header.e_magic != IMAGE_DOS_SIGNATURE {
-            return Ok(format!("\"{}\" is not a valid PE file.", file));
+            return Ok(String::from("Not a valid DOS file."));
         }
 
         reader.seek(io::SeekFrom::Start(header.e_lfanew as u64))?;
@@ -81,13 +81,13 @@ fn x96check(file: &str) -> io::Result<String> {
         reader.read_exact(header)?;
         let header: ImageNtHeaders = std::ptr::read(header.as_ptr() as *const _);
         if header.signature != IMAGE_NT_SIGNATURE {
-            return Ok(format!("\"{}\" is not a valid PE file.", file));
+            return Ok(String::from("Not a valid PE file."));
         }
 
         if header.file_header.machine == IMAGE_FILE_MACHINE_I386 {
-            return Ok(format!("\"{}\" is 32bit.", file));
+            return Ok(String::from("32bit"));
         } else if header.file_header.machine == IMAGE_FILE_MACHINE_AMD64 {
-            return Ok(format!("\"{}\" is 64bit.", file));
+            return Ok(String::from("64bit"));
         } else {
             return Ok(String::from("Unknown"));
         }
@@ -100,6 +100,6 @@ fn main() {
     let ret = x96check(&opts.file);
     match ret {
         Ok(ok) => println!("{}", ok),
-        Err(_) => {}
+        Err(e) => println!("{}", e),
     }
 }
