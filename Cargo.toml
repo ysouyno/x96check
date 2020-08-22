@@ -8,6 +8,3 @@ version = "0.1.0"
 
 [dependencies]
 structopt = "0.3"
-
-[target.'cfg(windows)'.dependencies]
-winapi = {version = "0.3", features = ["winuser", "fileapi", "winnt", "handleapi"]}
