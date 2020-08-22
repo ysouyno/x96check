@@ -1,11 +1,14 @@
-use structopt::StructOpt;
-
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::io::BufReader;
-use std::path::Path;
 use std::slice;
+use structopt::StructOpt;
+
+const IMAGE_DOS_SIGNATURE: i16 = 0x5A4D; // MZ
+const IMAGE_NT_SIGNATURE: i32 = 0x00004550; // PE00
+const IMAGE_FILE_MACHINE_I386: u16 = 0x014C; // Intel 386.
+const IMAGE_FILE_MACHINE_AMD64: u16 = 0x8664; // AMD64 (K8)
 
 #[cfg(windows)]
 #[repr(C)]
@@ -57,54 +60,46 @@ struct Opts {
     file: String,
 }
 
-fn transmute_slice_u8_to_struct1(buf: &[u8]) -> ImageDosHeader {
-    let p: *const [u8; std::mem::size_of::<ImageDosHeader>()] =
-        buf.as_ptr() as *const [u8; std::mem::size_of::<ImageDosHeader>()];
-    unsafe { std::mem::transmute(*p) }
-}
+#[cfg(windows)]
+fn x96check(file: &str) -> io::Result<String> {
+    let mut reader = BufReader::new(File::open(file)?);
 
-fn transmute_slice_u8_to_struct2(buf: &[u8]) -> ImageNtHeaders {
-    let p: *const [u8; std::mem::size_of::<ImageNtHeaders>()] =
-        buf.as_ptr() as *const [u8; std::mem::size_of::<ImageNtHeaders>()];
-    unsafe { std::mem::transmute(*p) }
-}
-
-fn read_structs<T, P: AsRef<Path>>(path: P) -> io::Result<()> {
-    let path = path.as_ref();
-    let size = ::std::mem::size_of::<T>();
-    let mut reader = BufReader::new(File::open(path)?);
     unsafe {
+        let size = ::std::mem::size_of::<ImageDosHeader>();
         let mut header: ImageDosHeader = std::mem::zeroed();
-        let buffer = slice::from_raw_parts_mut(&mut header as *mut _ as *mut u8, size);
-        reader.read_exact(buffer)?;
-        let config = transmute_slice_u8_to_struct1(buffer);
-        println!("{}", config.e_magic);
+        let header = slice::from_raw_parts_mut(&mut header as *mut _ as *mut u8, size);
+        reader.read_exact(header)?;
+        let header: ImageDosHeader = std::ptr::read(header.as_ptr() as *const _);
+        if header.e_magic != IMAGE_DOS_SIGNATURE {
+            return Ok(format!("\"{}\" is not a valid PE file.", file));
+        }
 
-        reader.seek(std::io::SeekFrom::Start(header.e_lfanew as u64))?;
+        reader.seek(io::SeekFrom::Start(header.e_lfanew as u64))?;
+        let size = ::std::mem::size_of::<ImageNtHeaders>();
+        let mut header: ImageNtHeaders = std::mem::zeroed();
+        let header = slice::from_raw_parts_mut(&mut header as *mut _ as *mut u8, size);
+        reader.read_exact(header)?;
+        let header: ImageNtHeaders = std::ptr::read(header.as_ptr() as *const _);
+        if header.signature != IMAGE_NT_SIGNATURE {
+            return Ok(format!("\"{}\" is not a valid PE file.", file));
+        }
 
-        let mut header: ImageFileHeader = std::mem::zeroed();
-        let buffer = slice::from_raw_parts_mut(&mut header as *mut _ as *mut u8, size);
-        reader.read_exact(buffer)?;
-        let config = transmute_slice_u8_to_struct2(buffer);
-        println!("{}", config.file_header.machine);
-        if config.file_header.machine == 0x14c {
-            println!("32bit");
-        } else if config.file_header.machine == 0x8664 {
-            println!("64bit");
+        if header.file_header.machine == IMAGE_FILE_MACHINE_I386 {
+            return Ok(format!("\"{}\" is 32bit.", file));
+        } else if header.file_header.machine == IMAGE_FILE_MACHINE_AMD64 {
+            return Ok(format!("\"{}\" is 64bit.", file));
         } else {
-            println!("Unknown");
+            return Ok(String::from("Unknown"));
         }
     }
-    Ok(())
-}
-
-#[cfg(windows)]
-fn x96check(file: &str) {
-    read_structs::<ImageDosHeader, _>(file).unwrap();
 }
 
 fn main() {
     let opts = Opts::from_args();
 
-    x96check(&opts.file);
+    let ret = x96check(&opts.file);
+    match ret {
+        Ok(ok) => println!("{}", ok),
+        Err(_) => {}
+    }
 }
