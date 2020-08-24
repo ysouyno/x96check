@@ -10,7 +10,6 @@ const IMAGE_NT_SIGNATURE: i32 = 0x00004550; // PE00
 const IMAGE_FILE_MACHINE_I386: u16 = 0x014C; // Intel 386.
 const IMAGE_FILE_MACHINE_AMD64: u16 = 0x8664; // AMD64 (K8)
 
-#[cfg(windows)]
 #[repr(C)]
 struct ImageDosHeader {
     e_magic: i16,      // Magic number
@@ -34,7 +33,6 @@ struct ImageDosHeader {
     e_lfanew: i32,     // File address of new exe header
 }
 
-#[cfg(windows)]
 #[repr(C)]
 struct ImageFileHeader {
     machine: u16,
@@ -46,7 +44,6 @@ struct ImageFileHeader {
     characteristics: i16,
 }
 
-#[cfg(windows)]
 #[repr(C)]
 struct ImageNtHeaders {
     signature: i32,
@@ -60,7 +57,6 @@ struct Opts {
     file: String,
 }
 
-#[cfg(windows)]
 fn x96check(file: &str) -> io::Result<String> {
     let mut reader = BufReader::new(File::open(file)?);
 
@@ -97,9 +93,13 @@ fn x96check(file: &str) -> io::Result<String> {
 fn main() {
     let opts = Opts::from_args();
 
-    let ret = x96check(&opts.file);
-    match ret {
-        Ok(ok) => println!("{}", ok),
-        Err(e) => println!("{}", e),
+    if cfg!(target_os = "windows") {
+        let ret = x96check(&opts.file);
+        match ret {
+            Ok(ok) => println!("{}", ok),
+            Err(e) => println!("{}", e),
+        }
+    } else {
+        println!("Only run on windows.");
     }
 }
